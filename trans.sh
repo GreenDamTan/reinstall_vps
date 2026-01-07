@@ -2559,7 +2559,7 @@ create_part() {
             update_part
 
             mkfs.fat /dev/$xda*1                #1 efi
-            mkfs.ext4 -F $ext4_opts /dev/$xda*2 #2 os + installer
+            mkfs.btrfs -f /dev/$xda*2 #2 os + installer
         else
             # bios
             # 官方安装器不支持 bios + >2t
@@ -2571,7 +2571,7 @@ create_part() {
             update_part
 
             echo                                #1 官方安装有这个分区
-            mkfs.ext4 -F $ext4_opts /dev/$xda*2 #2 os + installer
+            mkfs.btrfs -f $ext4_opts /dev/$xda*2 #2 os + installer
         fi
     elif is_use_cloud_image; then
         installer_part_size="$(get_cloud_image_part_size)"
@@ -4297,7 +4297,7 @@ install_fnos() {
 
     # 挂载 /os
     mkdir -p /os
-    mount /dev/$xda*2 /os
+    mount -t btrfs -o compress-force=zstd:15 /dev/$xda*2 /os
 
     # 下载并挂载 iso
     mkdir -p /os/installer /iso
@@ -4357,7 +4357,7 @@ install_fnos() {
     fi
 
     # ssh root 登录，测试用
-    if false; then
+    if true; then
         allow_root_password_login $os_dir
         chroot $os_dir systemctl enable ssh
     fi
@@ -4391,6 +4391,10 @@ install_fnos() {
             echo "$fstab_line_efi" | sed "s/%s/$uuid/"
         fi
     } >$os_dir/etc/fstab
+
+    # btrfs
+    sed -i "s/ext4/btrfs/g" $os_dir/etc/fstab
+    sed -i "s/errors=remount-ro/defaults,compress-force=zstd:15/g" $os_dir/etc/fstab
 
     # 网卡配置
     create_cloud_init_network_config /net.cfg
@@ -7190,6 +7194,8 @@ trans() {
             install_nixos
             ;;
         fnos)
+            apk add btrfs-progs
+            modprobe -v btrfs
             create_part
             install_fnos
             ;;
